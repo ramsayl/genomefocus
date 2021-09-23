@@ -1,0 +1,78 @@
+#!/usr/bin/perl -w
+use strict;
+
+use Getopt::Long;
+my $fasta_file;
+my $min_lgth;
+
+GetOptions("fasta=s" => \$fasta_file,
+    "length=i" => \$min_lgth);
+
+unless (defined $fasta_file && defined $min_lgth) {
+print<<EOF;
+Usage:
+    calculate_n50
+        --fasta    [-f]   assembly sequences in FASTA format
+        --length   [-l]   minimum sequence length
+
+EOF
+exit 1;
+}
+
+open(IN,"<".$fasta_file) || die "Cannot open fasta file\n";
+
+my ($len,$total)=(0,0);
+my @x;
+while(<IN>){
+    chomp;
+	if(/^[\>\@]/){
+		if($len>$min_lgth){
+			$total+=$len;
+			push @x,$len;
+		}
+		$len=0;
+	}
+	else{
+		s/\s//g;
+		$len+=length($_);
+	}
+}
+if ($len>$min_lgth){
+	$total+=$len;
+	push @x,$len;
+}
+@x=sort{$b<=>$a} @x;
+
+#pretty look
+my $wrap = 10;
+
+my $num_contigs = scalar @x;
+
+print "Num sequences : $num_contigs".' 'x($wrap-length($num_contigs))."Num bases : $total\n";
+print "Max length  : ".$x[0]."\n";
+my ($count,$f50,$f60,$f70,$f80,$f90)=(0,0,0,0,0,0);
+for (my $j=0;$j<@x;$j++){
+	$count+=$x[$j];
+    my $cur = $j+1;
+	if (($count>=$total*0.5)&&($f50==0)) {
+		print "N50 value   : $cur".' 'x($wrap-length($cur))."N50 size  : $x[$j]\n";
+        $f50 =1;
+	}
+    if (($count>=$total*0.6)&&($f60==0)) {
+		print "N60 value   : $cur".' 'x($wrap-length($cur))."N60 size  : $x[$j]\n";
+        $f60=1;
+	}
+    if (($count>=$total*0.7)&&($f70==0)) {
+        print "N70 value   : $cur".' 'x($wrap-length($cur))."N70 size  : $x[$j]\n";
+        $f70=1;
+    }
+    if (($count>=$total*0.8)&&($f80==0)) {
+        print "N80 value   : $cur".' 'x($wrap-length($cur))."N80 size  : $x[$j]\n";
+        $f80=1;
+    }
+    if (($count>=$total*0.9)&&($f90==0)) {
+        print "N90 value   : $cur".' 'x($wrap-length($cur))."N90 size  : $x[$j]\n";
+        $f90=1;
+    }
+
+}
