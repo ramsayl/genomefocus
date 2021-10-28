@@ -73,7 +73,7 @@ perl run.pl racon-iter1-part2.list minimap-racon-iter1k23map-ont.sam ../sequence
  programs: HiCUP (0.7.2+) and prerequisites (samtools 1.9), SALSA2 (python 2.7 required), BEDtools (2.1.2+)
  Note: There seems to be incompatibility between the listed version of HiCUP and samtools 1.12. 
  
- Run HiCUP as described in its documentation (create bowtie2 index for polished contigs, run hicup_extractor, etc). One of its config files, prepared for bowtie2 alignment, is here, but requires insertion of various file names to run.
+ Run HiCUP as described in its documentation (create bowtie2 index for polished contigs, run hicup_digester with the --arima option, etc). One of its config files, prepared for bowtie2 alignment, is here, but requires insertion of various file names to run.
  Create a merged alignment of all relevant hicup.bam files. One will be created per lane of data.
  Samples:
  ```
@@ -94,7 +94,7 @@ samtools sort -n -@ 4 -o merged-sorted.bam merged.bam
  ```
  perl pipeline.pl config log >log 2>log
  ```
- run mpileup on the population and create MSTMap input files. Some inferring of missing data is done here in the map prepping scripts as well as binning of 100% identical markers. Parameters on vcftools filtering may need to be adjusted depending on data quality. 
+ run mpileup on the population and create MSTMap input files. Some inferring of missing data is done here in the map prepping scripts as well as binning of 100% identical markers. Parameters on vcftools filtering may need to be adjusted depending on data quality. The mapprepper.pl script runs a set of default filtering criteria and creates input for MSTMap. Filtering may be necessary to adjust; at this step we are looking for a maximal set of markers to assign chromosome only, so some suboptimal markers might be included at your own discretion.
  
  Sample:
  ```
