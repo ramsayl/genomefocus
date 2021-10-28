@@ -20,7 +20,7 @@ The overall workflow is visually described in the file 'workflow.png'. In summar
 It is recommended to move or symlink raw sequence files to the sequences subdirectory for organization purposes.
 
 ### 1: Initial Assembly
-Necessary software: smartdenovo
+Necessary software: smartdenovo (v1.0)
 
 In the assembly subdirectory, edit smartdenovo-k23.make for your raw sequence file and install of smartdenovo. We find this kmer and assembler best for lentil genomes -- however other assemblers may do better for other genomes (redbean, canu, etc).
 
@@ -28,7 +28,7 @@ A calculate_n50 perl script has been included to aid with assesment of raw read 
   
 ### 2: Polish Assembly
 
-Necessary software: bwa, minimap2, racon, gmap, BUSCO
+Necessary software: bwa (0.7.17+), minimap2 (2.17+), racon (1.4.7), gmap (version 2011-09-14 *specifically* recommended), BUSCO (1.1b1)
 
 We run two rounds of racon polishing using long reads, followed by one of illumina shotgun sequencing, primarily to polish genic regions. Upcoming versions of the workflow will likely include medaka in this stage. As an assembly completeness check, we will run gmap to compare the CDS sequences from a related species to the polished assembly, as well as run BUSCO. Expect 92-96% completeness with the eudicotyledons_odb10 database.
 
@@ -61,22 +61,23 @@ racon -t 140 samples/S00E866_r12-p-e.fastq iter1illumina-paired-edit.sam racon-i
 
 The split-polishing-job.pl script allows you to split racon tasks into parts if RAM usage is an issue.. Since RAM usage is related to number of reads mapping more than the raw contig count, the best method to split up your data should be determined by your assembly. Create lists of contigs per part and run as so:
 ```
-IG_72805/polishing/cmd-k23.sh:perl run.pl racon-iter1-part1.list minimap-racon-iter1k23map-ont.sam ../sequences/S00E866-guppy3.6.1.pass.fastq part1.sam part1.fastq &
-IG_72805/polishing/cmd-k23.sh:perl run.pl racon-iter1-part2.list minimap-racon-iter1k23map-ont.sam ../sequences/S00E866-guppy3.6.1.pass.fastq part2.sam part2.fastq &
-IG_72805/polishing/cmd-k23.sh:perl run.pl racon-iter1-part2.list minimap-racon-iter1k23map-ont.sam ../sequences/S00E866-guppy3.6.1.pass.fastq part3.sam part3.fastq &
+perl run.pl racon-iter1-part1.list minimap-racon-iter1k23map-ont.sam ../sequences/S00E866-guppy3.6.1.pass.fastq part1.sam part1.fastq &
+perl run.pl racon-iter1-part2.list minimap-racon-iter1k23map-ont.sam ../sequences/S00E866-guppy3.6.1.pass.fastq part2.sam part2.fastq &
+perl run.pl racon-iter1-part2.list minimap-racon-iter1k23map-ont.sam ../sequences/S00E866-guppy3.6.1.pass.fastq part3.sam part3.fastq &
 ```
 
 ### 3) Initial HiC Run
 
  Filter and align HiC data using HiCUP. Split potentially chimeric contigs with SALSA2. 
 
- programs: HiCUP and prerequisites, SALSA2, BEDtools
+ programs: HiCUP (0.7.2+) and prerequisites (samtools 1.9), SALSA2 (python 2.7 required), BEDtools (2.1.2+)
+ Note: There seems to be incompatibility between the listed version of HiCUP and samtools 1.12. 
  
  Run HiCUP as described in its documentation (create bowtie2 index for polished contigs, run hicup_extractor, etc). One of its config files, prepared for bowtie2 alignment, is here, but requires insertion of various file names to run.
  Create a merged alignment of all relevant hicup.bam files. One will be created per lane of data.
  Samples:
  ```
- samtools merge merged.bam *hicup.bam &
+samtools merge merged.bam *hicup.bam &
 samtools sort -n -@ 4 -o merged-sorted.bam merged.bam
 ```
  Commands to prepare appropriate input for SALSA2 are provided in the short run-salsa.cmd bash script.
@@ -120,7 +121,7 @@ cat *debinned|sed 's/p/\t/'|sed 's/-B//'|sort -k3,3 -k4,4n|perl -ne 'if ($_ =~ /
 
  Use data from the genetic map linkage groups to initially group and create clusters file. A sample is provided to show the format. the initial number is the number of contigs in each group. Rescue contigs containing no markers in the map and optimize ordering of contigs within each cluster.
  
- Necessary software: ALLHiC
+ Necessary software: ALLHiC (0.9.13+)
 
 Sample:
 ```
@@ -160,15 +161,13 @@ ALLHiC_build assembly.cleaned.fasta
 
 Re-run HiC against the 'current' version of the assembly built with ALLHiC. Then create files to review and edit the assembly with Juicebox. The agp2assembly.py script can be obtained at https://github.com/phasegenomics/juicebox_scripts. The awk command to properly convert the sam file to a format useful for juicebox binary creation was obtained from a forum discussion. 
 
-Necessary software: HiCUP, Juicebox and tools jar, MUMmer.
+Necessary software: HiCUP, Juicebox (1.9.9) and tools jar, MUMmer.
 
 ```
 samtools merge merged.bam *hicup.bam &
 samtools sort -n -@ 4 -o merged-sorted.bam merged.bam
 samtools view merged-sorted.bam |awk 'BEGIN {FS="\t"; OFS="\t"} {name1=$1; str1=and($2,16); chr1=$3; pos1=$4; mapq1=$5; getline; name2=$1; str2=and($2,16); chr2=$3; pos2=$4; mapq2=$5; if(name1==name2) { if (chr1>chr2){print name1, str2, chr2, pos2,1, str1, chr1, pos1, 0, mapq2, mapq1} else {print name1, str1, chr1, pos1, 0, str2, chr2, pos2 ,1, mapq1, mapq2}}}' | sort -k3,3d -k7,7d > readnamesort.txt &
 
-perl -e 'for($i=1;$i <=7;$i++){system("cat readnamesort.txt |perl -ne 'if ($_ =~ /group$i.*group$i/){print $_}' >g$i-readnamesort.txt");}'
-//
 cat readnamesort.txt |perl -ne 'if ($_ =~ /group1.*group1/){print $_}' >g1-readnamesort.txt &
 cat readnamesort.txt |perl -ne 'if ($_ =~ /group2.*group2/){print $_}' >g2-readnamesort.txt &
 cat readnamesort.txt |perl -ne 'if ($_ =~ /group3.*group3/){print $_}' >g3-readnamesort.txt &
@@ -176,7 +175,7 @@ cat readnamesort.txt |perl -ne 'if ($_ =~ /group4.*group4/){print $_}' >g4-readn
 cat readnamesort.txt |perl -ne 'if ($_ =~ /group5.*group5/){print $_}' >g5-readnamesort.txt &
 cat readnamesort.txt |perl -ne 'if ($_ =~ /group6.*group6/){print $_}' >g6-readnamesort.txt &
 cat readnamesort.txt |perl -ne 'if ($_ =~ /group7.*group7/){print $_}' >g7-readnamesort.txt &
-//
+
 perl -e 'for($i=1;$i <=7;$i++){system("grep ^group$i groups.agp|tail -1|cut -f 1,3 >group$i.size");}'
 perl -e 'for($i=1;$i <=7;$i++){system("grep ^group$i groups.agp >group$i.agp");}'
 perl -e 'for($i=1;$i <=7;$i++){system("python agp2assembly.py group$i.agp group$i.assembly");}'
@@ -192,17 +191,28 @@ Sample:
 ```
 nucmer -b 50 -l 500 -p IG72623-v1-vsLcb50l500 /isilon/groups/lentil/Lcu/Lcu.2RBY/pseudo/Lens_culinaris_2.0.fasta groups.asm.fasta
 ```
+Use Juicebox to run a manual review of each chromosome by loading the .hic in and the contig information in the 'open assembly' option. I am not going to detail the manual correction process here, details can be found in Juicebox documentation. Edits can be saved as a .review.assembly file, which will be used as the input to the next step.
 
 ### 7) Iterate
  Create new pseudomolecules based on changes made in Juicebox, re-run ALLHiC build and step 6 as necessary until satisfied with the pseudomolecules.
  
- If contigs are broken during the Juicebox phase, the contig fasta file needs to be modified accordingly.
+ If contigs are broken during the Juicebox phase, the contig fasta file needs to be modified accordingly; a fragmentation script is provided. In addition, the tour files created from the review.assembly files will need to be manually edited for naming and to remove debris. 
+ 
 Sample:
 ```
-grep fragment group*.review.assembly
+cat group1.review.assembly|perl build-tour-from-review.pl >group1.tour
+cat group2.review.assembly|perl build-tour-from-review.pl >group2.tour
+cat group3.review.assembly|perl build-tour-from-review.pl >group3.tour
+cat group4.review.assembly|perl build-tour-from-review.pl >group4.tour
+cat group5.review.assembly|perl build-tour-from-review.pl >group5.tour
+cat group6.review.assembly|perl build-tour-from-review.pl >group6.tour
+cat group7.review.assembly|perl build-tour-from-review.pl >group7.tour
+grep fragment group*.review.assembly >fragments.txt 
 cat fragments.txt |perl -plane '$_ =~ s/group.*assembly:>//;$_ =~ s/:::/\t/g;$_ =~ s/\s+/\t/g;$_ =~s/debris\t//;'|cut -f 1,2,4 >fragments-edit.txt 
-cat fragments-edit.txt |perl fragmentbreaker.pl ../../hic/scaffolds-break/assembly.cleaned.fasta
+cat fragments-edit.txt |perl fragmentbreaker.pl ../../hic/scaffolds-break/assembly.cleaned.fasta >assembly.broken.fasta
+sed -i 's/:::/_/g' *tour
 ```
+
 
 ### 8) Finalize Assembly
 Plastid contamination will be present, at least at low levels, in raw sequences, and may be assembled and polished during the process. We often have chloroplast assemble as a single sequence, and mitochondria as 2-3 contigs. As a final clean up step, identify and remove these, as well as identify telomeric sequences and investigate their placement in the assembly. Create a list of contigs containing largely sequence to be removed.
